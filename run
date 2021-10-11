@@ -1,0 +1,109 @@
+#!/user/bin/env bash
+
+# set the app name 
+app_name="tempr"
+
+# set the api docker file path
+dockerfile_images_path="./images/"
+
+# set the app iamge name
+app_image_name="${app_name}/app"
+
+if [ "$1" = "-help" ]; then
+    echo "-build - action to build the images"
+    echo "-compose - action to create the containers from avaible images"
+    echo "-kill - action to kill the images or the containers"
+    echo "-show - action to display the images or the created containers. Pleas check the bash run -show -help for more info"
+    echo "-status - action to display the containers status"
+    echo "-user - create postgres user"
+    echo "-command - execute the django commnad to consume data"
+elif [ "$1" = "-build" ]; then
+    # build the app image
+    {
+        docker build -t $app_image_name -f "${dockerfile_app_path}Dockerfile" .
+        echo "SECCESS::App image was build"
+    } || {
+        echo "ERROR::API image was not build"
+    }
+elif [ "$1" = "-compose" ]; then
+    if [ "$2" = "-help" ]; then
+        echo "-d - run the container in background"
+        echo "-d -b - run the container in background and make the build in the same time"
+        echo "-b - run the container and make the build in the same time"
+    elif [ "$2" = "-d" ]; then
+        if [ "$3" = "-b" ]; then 
+            docker-compose up -d --build
+        else
+            docker-compose up -d
+        fi
+        docker exec -it tempr_app python manage.py migrate
+    elif [ "$2" = "-b" ]; then
+        docker-compose up --build
+        docker exec -it tempr_app python manage.py migrate
+    else
+        docker-compose up
+        docker exec -it tempr_app python manage.py migrate
+    fi
+elif [ "$1" = "-kill" ]; then
+    if [ "$2" = "-help" ]; then
+        echo "-c - kill the containers"
+        echo "-i - kill all images"
+    elif [ "$2" = "-c" ]; then
+        docker-compose down
+    elif [ "$2" = "-i" ]; then
+        # stop the all containers from this project
+        docker-compose down
+        # ckeck the kill type
+        docker rmi --force $(docker images -a -q)
+    else
+        echo "You need to specify the second parameter. Please execute the fallowing command 'bash run -kill -help'"
+    fi
+elif [ "$1" = "-show" ]; then
+    if [ "$2" = "-help" ]; then
+        echo "-i - display all images"
+        echo "-c - display all containers"
+    elif [ "$2" = "-c" ]; then
+        docker container ls -a
+    elif [ "$2" = "-i" ]; then
+        docker images
+    else
+        echo "You need to specify the second parameter. Please execute the fallowing command 'bash run -show -help'"
+    fi
+elif [ "$1" = "-status" ]; then
+    docker-compose ps
+elif [ "$1" = "-user" ]; then
+    if [ "$2" = "-help" ]; then
+        echo "-c - create user"
+        echo "example get token - bash run -user -c"
+        echo "-t - Get user token"
+        echo "example get token - bash run -user -t username password"
+    elif [ "$2" = "-c" ]; then
+        docker exec -it tempr_app python manage.py createsuperuser
+    elif [ "$2" = "-t" ]; then
+        if [ -z "$3" ]; then
+            echo "Youn need to specify the username"
+        elif [ -z "$4" ]; then
+            echo "Youn need to specify the password"
+        else
+            request=$(CURL -X POST -H "Content-Type: application/json" -d "{\"username\":\"$3\", \"password\":\"$4\"}" "http://0.0.0.0:3000/api/auth/login/" )
+            echo "${request}"
+        fi
+    else
+        echo "You need to specify the second parameter. Please execute the fallowing command 'bash run -user -help'"
+    fi
+elif [ "$1" = "-command" ]; then
+    if [ "$2" = "-help" ]; then
+        echo '$1 - token'
+        echo '$2 - page size number'
+        echo '$3 - update mode status ( this param in this moment is not done'
+        echo 'example - bash run -command 7d8e391849d63ba92e0cfdb6cf9614e4a7e86f2a 1000'
+    elif [ -z "$2" ]; then
+        echo "Youn need to specify the the token or to -help param"
+    elif [ -z "$3" ]; then
+        echo "Youn need to specify the the page size number ex: 1000. By default is set to 10000"
+    else
+        docker exec -it tempr_app python manage.py consumedata --token "$2" --pageSize $3
+    fi
+else
+    echo "You need to specify the second parameter. Please execute the fallowing comamand 'bash run -help'"
+fi
